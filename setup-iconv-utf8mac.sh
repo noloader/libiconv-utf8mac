@@ -30,16 +30,8 @@ trap finish EXIT INT
 
 ###############################################################################
 
-rm -rf libiconv-utf8mac libiconv
-
-if ! git clone https://github.com/noloader/libiconv-utf8mac.git
-then
-    echo "Failed to clone libiconv-utf8mac"
-    exit 1
-fi
-
-mv libiconv-utf8mac libiconv || exit 1
-cd libiconv || exit 1
+make -f Makefile.utf8mac distclean &>/dev/null
+git checkout -f utf-8-mac-51.200.6.libiconv-1.16
 
 if ! make -f Makefile.utf8mac autogen
 then
