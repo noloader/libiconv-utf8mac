@@ -30,7 +30,9 @@ trap finish EXIT INT
 
 ###############################################################################
 
+make -f Makefile.utf8mac clean &>/dev/null
 make -f Makefile.utf8mac distclean &>/dev/null
+
 git checkout -f utf-8-mac-51.200.6.libiconv-1.16
 
 if ! make -f Makefile.utf8mac autogen
