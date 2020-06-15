@@ -58,8 +58,13 @@ void main1 (void)
     */
     if (!(r == (size_t)(-1) && errno == EILSEQ
           && inptr - input == 1 && outptr - buf == 0))
+    {
+      iconv_close(cd);
       abort();
+    }
   }
+  if (cd != (iconv_t)(-1))
+    iconv_close(cd);
 }
 
 void main2 (void)
@@ -92,7 +97,10 @@ void main2 (void)
     */
     if (!(r == (size_t)(-1) && errno == EINVAL
           && inptr - input == 1 && outptr - buf == 0))
+    {
+      iconv_close(cd);
       abort();
+    }
 
     inleft = input + 20 - inptr;
     r = iconv (cd, (ICONV_CONST char **) &inptr, &inleft, &outptr, &outleft);
@@ -106,8 +114,13 @@ void main2 (void)
     */
     if (!(r == (size_t)(-1) && errno == EILSEQ
           && inptr - input == 1 && outptr - buf == 0))
+    {
+      iconv_close(cd);
       abort();
+    }
   }
+  if (cd != (iconv_t)(-1))
+    iconv_close(cd);
 }
 
 int main ()

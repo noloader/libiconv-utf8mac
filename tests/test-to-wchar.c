@@ -44,8 +44,14 @@ int main ()
                       &outptr, &outbytesleft);
 
     if (!(r == (size_t)(-1) && errno == EINVAL))
+    {
+      iconv_close(cd);
       abort ();
+    }
   }
+
+  if (cd != (iconv_t)(-1))
+    iconv_close(cd);
 
   return 0;
 }

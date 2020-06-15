@@ -471,7 +471,7 @@ static void subst_mb_to_uc_fallback
 
 /* Auxiliary variables for subst_uc_to_mb_fallback. */
 /* Converter from locale encoding to target encoding. */
-static iconv_t subst_uc_to_mb_cd;
+static iconv_t subst_uc_to_mb_cd = (iconv_t)(-1);
 /* Buffer of size ilseq_unicode_subst_size*4. */
 static char* subst_uc_to_mb_temp_buffer;
 
@@ -510,7 +510,7 @@ static void subst_uc_to_mb_fallback
 
 /* Auxiliary variables for subst_mb_to_wc_fallback. */
 /* Converter from locale encoding to wchar_t. */
-static iconv_t subst_mb_to_wc_cd;
+static iconv_t subst_mb_to_wc_cd = (iconv_t)(-1);
 /* Buffer of size ilseq_byte_subst_size. */
 static wchar_t* subst_mb_to_wc_temp_buffer;
 
@@ -552,7 +552,7 @@ static void subst_mb_to_wc_fallback
 
 /* Auxiliary variables for subst_wc_to_mb_fallback. */
 /* Converter from locale encoding to target encoding. */
-static iconv_t subst_wc_to_mb_cd;
+static iconv_t subst_wc_to_mb_cd = (iconv_t)(-1);
 /* Buffer of size ilseq_wchar_subst_size*4.
    Hardcode factor 4, because MB_LEN_MAX is not reliable on some platforms. */
 static char* subst_wc_to_mb_temp_buffer;
@@ -597,7 +597,7 @@ static void subst_wc_to_mb_fallback
 
 /* Auxiliary variables for subst_mb_to_mb_fallback. */
 /* Converter from locale encoding to target encoding. */
-static iconv_t subst_mb_to_mb_cd;
+static iconv_t subst_mb_to_mb_cd = (iconv_t)(-1);
 /* Buffer of size ilseq_byte_subst_size*4. */
 static char* subst_mb_to_mb_temp_buffer;
 
@@ -842,12 +842,15 @@ static int convert (iconv_t cd, int infile, const char* infilename)
 
 /* ========================================================================= */
 
+/* Be sure the handle is closed on exit when destructors are available */
+static iconv_t std_cd = (iconv_t)(-1);
+static iconv_t tmp_cd = (iconv_t)(-1);
+
 int main (int argc, char* argv[])
 {
   const char* fromcode = NULL;
   const char* tocode = NULL;
   int do_list = 0;
-  iconv_t cd;
   struct iconv_fallbacks fallbacks;
   struct iconv_hooks hooks;
   int i;
@@ -1021,15 +1024,15 @@ int main (int argc, char* argv[])
       fromcode = "char";
     if (tocode == NULL)
       tocode = "char";
-    cd = iconv_open(tocode,fromcode);
-    if (cd == (iconv_t)(-1)) {
-      if (iconv_open("UCS-4",fromcode) == (iconv_t)(-1))
+    std_cd = iconv_open(tocode,fromcode);
+    if (std_cd == (iconv_t)(-1)) {
+      if ((tmp_cd = iconv_open("UCS-4",fromcode)) == (iconv_t)(-1))
         error(0,0,
               /* TRANSLATORS: An error message.
                  The placeholder expands to the encoding name, specified through --from-code.  */
               _("conversion from %s unsupported"),
               fromcode);
-      else if (iconv_open(tocode,"UCS-4") == (iconv_t)(-1))
+      else if ((tmp_cd = iconv_open(tocode,"UCS-4")) == (iconv_t)(-1))
         error(0,0,
               /* TRANSLATORS: An error message.
                  The placeholder expands to the encoding name, specified through --to-code.  */
@@ -1091,15 +1094,15 @@ int main (int argc, char* argv[])
       fallbacks.wc_to_mb_fallback =
         (ilseq_wchar_subst != NULL ? subst_wc_to_mb_fallback : NULL);
       fallbacks.data = NULL;
-      iconvctl(cd, ICONV_SET_FALLBACKS, &fallbacks);
+      iconvctl(std_cd, ICONV_SET_FALLBACKS, &fallbacks);
     }
     /* Set up hooks for updating the line and column position. */
     hooks.uc_hook = update_line_column;
     hooks.wc_hook = NULL;
     hooks.data = NULL;
-    iconvctl(cd, ICONV_SET_HOOKS, &hooks);
+    iconvctl(std_cd, ICONV_SET_HOOKS, &hooks);
     if (i == argc)
-      status = convert(cd,fileno(stdin),
+      status = convert(std_cd,fileno(stdin),
                        /* TRANSLATORS: A filename substitute denoting standard input.  */
                        _("(stdin)"));
     else {
@@ -1117,12 +1120,13 @@ int main (int argc, char* argv[])
                 infilename);
           status = 1;
         } else {
-          status |= convert(cd,fileno(infile),infilename);
+          status |= convert(std_cd,fileno(infile),infilename);
           fclose(infile);
         }
       }
     }
-    iconv_close(cd);
+    iconv_close(std_cd);
+    std_cd = (iconv_t)(-1);
   }
   if (ferror(stdout) || fclose(stdout)) {
     error(0,0,
@@ -1132,3 +1136,26 @@ int main (int argc, char* argv[])
   }
   exit(status);
 }
+
+/* Leak check tooling like Valgrind and Asan */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((destructor))
+static void
+do_cleanup (void)
+{
+  if (std_cd != (iconv_t)(-1))
+    iconv_close(std_cd);
+  if (tmp_cd != (iconv_t)(-1))
+    iconv_close(tmp_cd);
+  if (subst_mb_to_uc_cd != (iconv_t)(-1))
+    iconv_close(subst_mb_to_uc_cd);
+  if (subst_uc_to_mb_cd != (iconv_t)(-1))
+    iconv_close(subst_uc_to_mb_cd);
+  if (subst_mb_to_wc_cd != (iconv_t)(-1))
+    iconv_close(subst_mb_to_wc_cd);
+  if (subst_wc_to_mb_cd != (iconv_t)(-1))
+    iconv_close(subst_wc_to_mb_cd);
+  if (subst_mb_to_mb_cd != (iconv_t)(-1))
+    iconv_close(subst_mb_to_mb_cd);
+}
+#endif
